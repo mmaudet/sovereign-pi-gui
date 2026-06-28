@@ -1,5 +1,5 @@
 {
-  "_comment": "Optional. Copy to <your-workspace>/.pi/settings.json to pre-select ornith as that workspace's default model in pi-gui. Sets ONLY the default — it does NOT add 'enabledModels', because a non-empty enabledModels becomes an allowlist that would HIDE every other model (including the gpt built-ins).",
+  "_comment": "Optional. Copy to <your-workspace>/.pi/settings.json to pre-select ornith as that workspace's default model in pi-gui. Sets ONLY the default. It does NOT add 'enabledModels', because a non-empty enabledModels becomes an allowlist that would HIDE every other model (including the gpt built-ins).",
   "defaultProvider": "ornith",
   "defaultModel": "Ornith-1.0-35B"
 }

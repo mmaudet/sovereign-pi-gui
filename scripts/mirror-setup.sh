@@ -26,11 +26,11 @@ EX="$PREFIX/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions
 echo "==> provider: ornith"
 "$PI" install "${ORNITH_PROVIDER_FILE:-$HERE/extensions/ornith-provider.ts}"
 
-# 3. Superpowers — 14 process skills
+# 3. Superpowers: 14 process skills
 echo "==> skills: obra/superpowers"
 "$PI" install git:github.com/obra/superpowers
 
-# 4. Anthropic creative/design skills — clone repo, then install the wrapper extension
+# 4. Anthropic creative/design skills: clone repo, then install the wrapper extension
 SKILLS_DIR="$HOME/.pi/agent/git/github.com/anthropics/skills"
 echo "==> skills: anthropics/skills"
 if [ -d "$SKILLS_DIR/.git" ]; then
@@ -48,7 +48,7 @@ for ext in notify protected-paths confirm-destructive dirty-repo-guard auto-comm
   if [ -f "$EX/$ext.ts" ]; then
     "$PI" install "$EX/$ext.ts"
   else
-    echo "    WARN: $EX/$ext.ts not found (SDK version mismatch?) — skipping" >&2
+    echo "    WARN: $EX/$ext.ts not found (SDK version mismatch?), skipping" >&2
   fi
 done
 

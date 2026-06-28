@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // Self-hosted OpenAI-compatible endpoint (vLLM, LM Studio, Ollama, RunPod, …).
-// Set ORNITH_BASE_URL / ORNITH_API_KEY in your environment — never hard-code the key here.
+// Set ORNITH_BASE_URL / ORNITH_API_KEY in your environment. Never hard-code the key here.
 // (pi also interpolates "$ENV_VAR" inside apiKey at request time, hence the fallback below.)
 const ENDPOINT = process.env.ORNITH_BASE_URL ?? "https://YOUR-ENDPOINT-8000.proxy.runpod.net/v1";
 const API_KEY = process.env.ORNITH_API_KEY ?? "$ORNITH_API_KEY";

@@ -1,8 +1,8 @@
 # sovereign-pi-gui
 
 Faire tourner un **LLM auto-hébergé compatible OpenAI** (ici `Ornith-1.0-35B` servi par vLLM sur
-RunPod) à l'intérieur de l'agent de code [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) —
-aussi bien dans le **CLI terminal** que dans l'**application de bureau pi-gui** — avec les mêmes skills
+RunPod) à l'intérieur de l'agent de code [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent),
+aussi bien dans le **CLI terminal** que dans l'**application de bureau pi-gui**, avec les mêmes skills
 et extensions de sécurité qu'on aurait sur un serveur. **Sans forker pi-gui ni le recompiler** : tout se
 joue dans la configuration sous `~/.pi/agent`.
 
@@ -36,7 +36,7 @@ que son propre dossier `userData` Electron) : il suffit donc de **remplir ce seu
 |------|----------|
 | Provider | `ornith` → `Ornith-1.0-35B` (OpenAI Chat Completions, 131K de contexte, raisonnement) |
 | Skills process (14) | [obra/superpowers](https://github.com/obra/superpowers) |
-| Skills créatives (6) | frontend-design, web-artifacts-builder, webapp-testing, theme-factory, brand-guidelines, canvas-design — depuis [anthropics/skills](https://github.com/anthropics/skills) |
+| Skills créatives (6) | frontend-design, web-artifacts-builder, webapp-testing, theme-factory, brand-guidelines, canvas-design (depuis [anthropics/skills](https://github.com/anthropics/skills)) |
 | Sécurité (5) | notify, protected-paths, confirm-destructive, dirty-repo-guard, auto-commit-on-exit |
 | TUI (3) | status-line, model-status, custom-footer |
 
@@ -105,7 +105,7 @@ Pourquoi ça marche tout seul (et un piège à éviter) :
   (y compris les modèles gpt intégrés).
 - Optionnel : pré-sélectionner ornith comme modèle par défaut d'un workspace en copiant
   [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) vers
-  `<workspace>/.pi/settings.json`. Il ne définit que `defaultProvider` / `defaultModel` — aucun impact
+  `<workspace>/.pi/settings.json`. Il ne définit que `defaultProvider` / `defaultModel`, sans impact
   sur la visibilité.
 
 ### Si ornith n'apparaît pas
@@ -116,19 +116,13 @@ Pourquoi ça marche tout seul (et un piège à éviter) :
 
 ## Fichiers
 
-- [`extensions/ornith-provider.ts`](extensions/ornith-provider.ts) — le provider personnalisé. Lit
+- [`extensions/ornith-provider.ts`](extensions/ornith-provider.ts) : le provider personnalisé. Lit
   `ORNITH_BASE_URL` / `ORNITH_API_KEY` depuis l'environnement ; modifiez le bloc `models` pour un autre modèle.
-- [`extensions/anthropic-skills-pack.ts`](extensions/anthropic-skills-pack.ts) — enregistre les skills
+- [`extensions/anthropic-skills-pack.ts`](extensions/anthropic-skills-pack.ts) : enregistre les skills
   anthropics/skills choisies via le hook `resources_discover` (pointe sur chaque `SKILL.md`).
-- [`scripts/mirror-setup.sh`](scripts/mirror-setup.sh) — installateur idempotent de tout ce qui précède.
-- [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) — fichier optionnel
+- [`scripts/mirror-setup.sh`](scripts/mirror-setup.sh) : installateur idempotent de tout ce qui précède.
+- [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) : fichier optionnel
   de modèle par défaut, par workspace.
-
-## Sécurité
-
-- La clé du provider est lue depuis `ORNITH_API_KEY` — gardez-la dans `.env` (ignoré par git), jamais
-  dans le dépôt.
-- Faites tourner (rotate) la clé si elle a déjà été partagée en clair.
 
 ## Crédits
 
