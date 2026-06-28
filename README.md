@@ -3,23 +3,97 @@
 Faire tourner un **LLM auto-hébergé compatible OpenAI** (ici `Ornith-1.0-35B` servi par vLLM sur
 RunPod) à l'intérieur de l'agent de code [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent),
 aussi bien dans le **CLI terminal** que dans l'**application de bureau pi-gui**, avec les mêmes skills
-et extensions de sécurité qu'on aurait sur un serveur. **Sans forker pi-gui ni le recompiler** : tout se
-joue dans la configuration sous `~/.pi/agent`.
+qu'on aurait sur un serveur. **Sans forker pi-gui ni le recompiler.**
 
-> Vérifié sur macOS avec pi `0.80.2`. Les mêmes étapes fonctionnent sous Linux.
+> Vérifié sur macOS avec pi `0.80.2` et pi-gui `0.1.0-beta.28`.
 
-## But
+## Le sujet en deux phrases
 
-`pi` est livré avec des fournisseurs cloud (OpenAI, Anthropic…). Pour le pointer vers **votre propre
-endpoint**, on enregistre un **fournisseur personnalisé** (custom provider) via une petite extension.
-L'interface de pi-gui n'offre pas de formulaire « ajouter un provider », **mais** son runtime lit le
-**même** fichier `~/.pi/agent/settings.json` que le CLI : enregistrer le provider une seule fois
-l'active donc dans les deux surfaces.
+pi-gui n'a **pas encore d'interface** pour brancher un endpoint OpenAI-compatible (Ollama, vLLM, LM
+Studio…). Mais son moteur sait déjà lire des providers custom depuis un fichier `~/.pi/agent/models.json` :
+en l'écrivant à la main, on obtient le modèle dans pi-gui **dès aujourd'hui**, en attendant que l'UI
+correspondante soit mergée en amont.
+
+## Statut côté pi-gui (amont)
+
+Deux fils suivent le sujet, **non mergés** à ce jour :
+
+- **[PR #14 : Add OpenAI-compatible custom endpoints (Ollama, vLLM, etc.)](https://github.com/minghinmatthewlam/pi-gui/pull/14)**
+  ajoute une section « Custom endpoints » dans Réglages > Providers, adossée à un `CustomProviderStore`
+  qui écrit dans `~/.pi/agent/models.json`. État : **ouverte, en conflit**.
+- **[Issue #24 : Feature: Local LLM Provider Support](https://github.com/minghinmatthewlam/pi-gui/issues/24)**
+  porte la demande générale (offline, Ollama, vLLM, budget).
+
+Le **backend existe déjà** dans le SDK : `RuntimeSupervisor` expose les modèles via
+`modelRegistry.getAll()`, qui lit `~/.pi/agent/models.json`. Ce qui manque tant que la PR #14 n'est pas
+mergée, c'est **uniquement le formulaire** dans les Réglages. La donnée, elle, est déjà prise en compte.
+
+> **Pourquoi pas une extension ?** On peut aussi enregistrer un provider via une extension
+> (`pi.registerProvider`), et ça marche en CLI. Mais cette voie tire `pi-tui` (prévu pour un terminal)
+> et **fait crasher le runtime Electron de pi-gui** (`EXC_BREAKPOINT` au chargement). `models.json` est
+> de la donnée pure : il ne peut rien crasher. On utilise donc `models.json`.
+
+## Procédure pas-à-pas (en attendant la PR #14)
+
+### 1. Écrire le provider dans `~/.pi/agent/models.json`
+
+Créez le fichier s'il n'existe pas :
+
+```json
+{
+  "providers": {
+    "ornith": {
+      "baseUrl": "https://VOTRE-ENDPOINT/v1",
+      "api": "openai-completions",
+      "apiKey": "VOTRE-CLE-EN-CLAIR",
+      "models": [
+        {
+          "id": "Ornith-1.0-35B",
+          "name": "Ornith 1.0 35B MoE",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 131072,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}
+```
+
+> **Clé en clair obligatoire pour pi-gui.** Une app lancée par le Finder n'hérite pas des variables
+> d'environnement du shell, donc `"$ORNITH_API_KEY"` ne serait pas résolu. Mettez la clé littérale.
+> Le fichier est sous `~/.pi/agent/` (privé à votre compte, comme `settings.json`). En CLI uniquement,
+> `"$ORNITH_API_KEY"` fonctionne aussi.
+
+### 2. Vérifier en CLI
+
+```bash
+pi --list-models ornith
+```
+
+Doit afficher une ligne `ornith  Ornith-1.0-35B  131.1K  16.4K  yes  no`.
+
+### 3. Relancer pi-gui
+
+**Quittez complètement pi-gui (⌘Q, pas juste fermer la fenêtre) et rouvrez-le** pour qu'il recharge
+`models.json`.
+
+### 4. Choisir le modèle dans le composer
+
+Ouvrez/créez un thread, puis ouvrez le **sélecteur de modèle** en bas du composer et choisissez
+**Ornith 1.0 35B MoE**.
+
+> ⚠️ **Ne cherchez pas ornith dans Réglages > Providers** : cette page ne liste que les providers à
+> clé/OAuth intégrés. Tant que la PR #14 n'est pas mergée, l'endpoint custom n'y apparaît pas, mais il
+> est bien disponible dans le sélecteur de modèle. Quand la PR sera mergée, la même config sera
+> éditable depuis Réglages > Providers > « Custom endpoints » (format `models.json` identique).
 
 ## Opération (comment ça marche)
 
 ```
-            ~/.pi/agent/settings.json   ← packages: [ ornith-provider, superpowers, … ]
+            ~/.pi/agent/models.json   ← providers: { ornith: { baseUrl, apiKey, models[] } }
                       │  (agent dir partagé)
         ┌─────────────┴─────────────┐
    pi (CLI)                    pi-gui (bureau Electron)
@@ -27,160 +101,60 @@ l'active donc dans les deux surfaces.
         └──────────► endpoint compatible OpenAI (vLLM / LM Studio / Ollama / RunPod)
 ```
 
-Les deux runtimes résolvent `getAgentDir()` → `~/.pi/agent`. pi-gui ne le surcharge pas (il ne définit
-que son propre dossier `userData` Electron) : il suffit donc de **remplir ce seul dossier**.
+Les deux runtimes lisent les modèles via le même `ModelRegistry` (`~/.pi/agent/models.json`).
 
 ## Ce que vous obtenez
 
 | Groupe | Éléments |
 |------|----------|
-| Provider | `ornith` → `Ornith-1.0-35B` (OpenAI Chat Completions, 131K de contexte, raisonnement) |
+| Provider | `ornith` → `Ornith-1.0-35B` (OpenAI Chat Completions, 131K de contexte, raisonnement), via `models.json` |
 | Skills process (14) | [obra/superpowers](https://github.com/obra/superpowers) |
 | Skills créatives (6) | frontend-design, web-artifacts-builder, **webapp-testing** (tests E2E Playwright), theme-factory, brand-guidelines, canvas-design (depuis [anthropics/skills](https://github.com/anthropics/skills)) |
 | Sécurité (5) | notify, protected-paths, confirm-destructive, dirty-repo-guard, auto-commit-on-exit |
 | TUI (3) | status-line, model-status, custom-footer |
-| Subagents | délégation à contexte isolé (agents scout/planner/worker/reviewer sur Ornith) + workflow `/implement` |
 
-Après installation, `pi list` affiche **11 paquets** et un prompt d'une ligne énumère **20 skills**.
+## Installation automatisée
 
-## Commandes
-
-### 1. Renseigner l'endpoint (ne jamais committer la clé)
+Plutôt que les étapes manuelles ci-dessus, le script fait tout (provider `models.json` + skills) de
+façon idempotente :
 
 ```bash
 cp .env.example .env
-"$EDITOR" .env                 # renseignez ORNITH_BASE_URL et ORNITH_API_KEY
-set -a; . ./.env; set +a       # charge les variables dans le shell courant
-```
-
-### 2. Lancer l'installateur idempotent
-
-```bash
+"$EDITOR" .env                 # ORNITH_BASE_URL et ORNITH_API_KEY
+set -a; . ./.env; set +a
 ./scripts/mirror-setup.sh
 ```
 
-Réexécuter le script est sans risque : `pi install` ignore les paquets déjà enregistrés.
-
-### 3. Vérifier
+Puis vérification complète :
 
 ```bash
 pi --list-models ornith
 echo "list all skills you have available" | pi --provider ornith --model Ornith-1.0-35B --print --thinking off
 ```
 
-La deuxième commande doit lister **20 skills** (14 « Process & Meta » + 6 « Creative & Design »).
+## Limite de contexte (erreur 400)
 
-### Ce que fait le script, en clair
-
-```bash
-# le provider Ornith (lit ORNITH_BASE_URL / ORNITH_API_KEY)
-pi install ./extensions/ornith-provider.ts
-
-# 14 skills de process
-pi install git:github.com/obra/superpowers
-
-# 6 skills créatives Anthropic : clone du repo + wrapper qui les enregistre
-git clone --depth 1 https://github.com/anthropics/skills.git \
-  ~/.pi/agent/git/github.com/anthropics/skills
-pi install ./extensions/anthropic-skills-pack.ts
-
-# 5 extensions de sécurité + 3 extensions TUI (exemples fournis avec le SDK)
-EX=$(npm config get prefix)/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions
-for e in notify protected-paths confirm-destructive dirty-repo-guard auto-commit-on-exit \
-         status-line model-status custom-footer; do
-  pi install "$EX/$e.ts"
-done
-```
-
-## pi-gui (bureau)
-
-Après le script, **quittez complètement pi-gui (⌘Q) puis rouvrez-le**, et ouvrez le sélecteur de
-modèle : `ornith · Ornith 1.0 35B MoE` y figure.
-
-Pourquoi ça marche tout seul (et un piège à éviter) :
-- Le sélecteur affiche **tous les modèles _disponibles_ quand aucune liste blanche n'est définie**,
-  c.-à-d. quand `enabledModelPatterns` est vide (`composer-commands.ts` : `length === 0 ⇒ tout afficher`).
-  Un provider personnalisé qui porte une clé API est « disponible » → il apparaît automatiquement.
-- ⚠️ **N'ajoutez pas** `enabledModels` dans un `.pi/settings.json` de workspace, sauf si vous le voulez
-  comme **liste blanche stricte** : une liste non vide **masque tous les modèles absents** de la liste
-  (y compris les modèles gpt intégrés).
-- Optionnel : pré-sélectionner ornith comme modèle par défaut d'un workspace en copiant
-  [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) vers
-  `<workspace>/.pi/settings.json`. Il ne définit que `defaultProvider` / `defaultModel`, sans impact
-  sur la visibilité.
-
-### Si ornith n'apparaît pas
-1. Le CLI le voit-il ? `pi --list-models ornith`
-2. L'endpoint répond-il ? `curl -sS "$ORNITH_BASE_URL/models" -H "Authorization: Bearer $ORNITH_API_KEY"`
-3. Quittez **complètement** pi-gui (⌘Q, pas seulement fermer la fenêtre) pour que son runtime recharge
-   l'agent dir.
+Ornith a une fenêtre de **131072 tokens** (input + output combinés). Sur un thread qui grossit trop on
+voit `400 ... maximum context length is 131072`. Pour l'éviter : `maxTokens` est réglé à **16384** (au
+lieu de 32768) pour laisser de la marge à l'input ; pour les longues sessions, utilisez `/compact` ou
+démarrez un nouveau thread.
 
 ## Tests E2E navigateur (Ornith)
 
-Le test E2E en navigateur **headless** est déjà couvert côté pi : le skill **`webapp-testing`** (l'un
-des 6 skills Anthropic ci-dessus) pilote **Playwright** pour tester des applications web locales. Il
-permet de vérifier le fonctionnement d'un frontend, déboguer l'UI, capturer des screenshots et lire les
-logs navigateur ; un helper `scripts/with_server.py` gère automatiquement le cycle de vie du ou des
-serveurs (frontend + backend).
-
-**Prérequis** (une seule fois) : Python avec Playwright.
-
-```bash
-pip install playwright
-playwright install chromium
-```
-
-**Utilisation** : demandez à Ornith de tester votre application, par exemple :
-
-```bash
-echo "teste le formulaire de login sur http://localhost:5173 avec webapp-testing" \
-  | pi --provider ornith --model Ornith-1.0-35B
-```
-
-Ornith écrit alors un script Playwright (chromium headless) et l'exécute via le helper de serveur.
-
-> Note : `/browse` et `/qa` (gstack) sont des outils **Claude Code** séparés, pas des paquets `pi` ;
-> ils ne font pas partie de ce dépôt.
-
-## Subagents (délégation, contexte isolé)
-
-Pour les tâches longues ou parallèles (par exemple la skill superpowers `subagent-driven-development`),
-Ornith peut **déléguer** à des subagents : chacun s'exécute dans un **process `pi` isolé** avec son
-propre contexte, ce qui évite de gonfler le thread principal. L'outil `subagent` offre 3 modes (un
-agent, parallèle, chaîné). Workflow-prompts fournis : `/implement` (scout → planner → worker),
-`/scout-and-plan`, `/implement-and-review`.
-
-**Piège d'installation** : installer l'extension via le **fichier** `index.ts`, pas le dossier. Le
-dossier n'a pas de `package.json`, donc `pi install <dossier>` n'expose aucun outil :
-
-```bash
-EX=$(npm config get prefix)/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions
-pi install "$EX/subagent/index.ts"
-```
-
-**Agents sur Ornith** : les agents d'exemple ciblent des modèles Claude ; sur un setup Ornith-only il
-faut les repointer sur `ornith/Ornith-1.0-35B` dans `~/.pi/agent/agents/*.md` (le script
-`mirror-setup.sh` le fait). Les workflow-prompts vont dans `~/.pi/agent/prompts/`.
-
-### Limite de contexte (erreur 400)
-
-Ornith a une fenêtre de **131072 tokens** (input + output combinés). Sur un thread qui grossit trop on
-voit : `400 ... maximum context length is 131072 ... N output + M input`. Deux leviers :
-
-- `maxTokens` du provider est réglé à **16384** (au lieu de 32768) pour laisser de la marge à l'input.
-- Pour les longues sessions : **déléguer aux subagents** (contexte isolé) et utiliser `/compact` ou un
-  nouveau thread. La progression d'un flux SDD vit dans des fichiers (`.superpowers/sdd/progress.md`),
-  donc un nouveau thread reprend où on en était.
+Le skill **`webapp-testing`** (l'un des 6 skills Anthropic) pilote **Playwright** (chromium headless)
+pour tester des applications web locales : vérifier un frontend, déboguer l'UI, screenshots, logs ; un
+helper `scripts/with_server.py` gère le cycle de vie des serveurs. Prérequis : `pip install playwright`
+puis `playwright install chromium`.
 
 ## Fichiers
 
-- [`extensions/ornith-provider.ts`](extensions/ornith-provider.ts) : le provider personnalisé. Lit
-  `ORNITH_BASE_URL` / `ORNITH_API_KEY` depuis l'environnement ; modifiez le bloc `models` pour un autre modèle.
+- [`models.json.example`](models.json.example) : le provider ornith au format `models.json` (à copier
+  vers `~/.pi/agent/models.json`).
 - [`extensions/anthropic-skills-pack.ts`](extensions/anthropic-skills-pack.ts) : enregistre les skills
-  anthropics/skills choisies via le hook `resources_discover` (pointe sur chaque `SKILL.md`).
-- [`scripts/mirror-setup.sh`](scripts/mirror-setup.sh) : installateur idempotent de tout ce qui précède.
-- [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) : fichier optionnel
-  de modèle par défaut, par workspace.
+  anthropics/skills via le hook `resources_discover`.
+- [`scripts/mirror-setup.sh`](scripts/mirror-setup.sh) : installateur idempotent (models.json + skills).
+- [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) : modèle par défaut
+  optionnel, par workspace.
 
 ## Crédits
 

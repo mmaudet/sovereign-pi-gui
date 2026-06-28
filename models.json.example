@@ -1,0 +1,21 @@
+{
+  "_comment": "Copie vers ~/.pi/agent/models.json (CLI + pi-gui le lisent). C'est la façon NATIVE et robuste d'ajouter un endpoint OpenAI-compatible (Ollama, vLLM, LM Studio). Pour pi-gui lancé via le Finder, apiKey DOIT être une chaîne littérale : les apps GUI ne voient pas les variables d'environnement du shell. En CLI uniquement, $ORNITH_API_KEY fonctionne aussi.",
+  "providers": {
+    "ornith": {
+      "baseUrl": "https://YOUR-ENDPOINT/v1",
+      "api": "openai-completions",
+      "apiKey": "REPLACE_WITH_YOUR_KEY",
+      "models": [
+        {
+          "id": "Ornith-1.0-35B",
+          "name": "Ornith 1.0 35B MoE",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 131072,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}
