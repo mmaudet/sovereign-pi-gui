@@ -52,7 +52,16 @@ for ext in notify protected-paths confirm-destructive dirty-repo-guard auto-comm
   fi
 done
 
-# 6. Verify
+# 6. Subagents: delegation tool (isolated context per task) + Ornith-pointed agents
+echo "==> subagent + agents (Ornith)"
+"$PI" install "$EX/subagent/index.ts"   # the FILE, not the dir (the dir has no package.json -> nothing loads)
+mkdir -p "$HOME/.pi/agent/agents" "$HOME/.pi/agent/prompts"
+for f in "$EX"/subagent/agents/*.md; do
+  sed -E 's#^model:[[:space:]].*#model: ornith/Ornith-1.0-35B#' "$f" > "$HOME/.pi/agent/agents/$(basename "$f")"
+done
+cp "$EX"/subagent/prompts/*.md "$HOME/.pi/agent/prompts/" 2>/dev/null || true
+
+# 7. Verify
 echo "==> done. installed packages:"
 "$PI" list
 echo

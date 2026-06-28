@@ -39,6 +39,7 @@ que son propre dossier `userData` Electron) : il suffit donc de **remplir ce seu
 | Skills créatives (6) | frontend-design, web-artifacts-builder, **webapp-testing** (tests E2E Playwright), theme-factory, brand-guidelines, canvas-design (depuis [anthropics/skills](https://github.com/anthropics/skills)) |
 | Sécurité (5) | notify, protected-paths, confirm-destructive, dirty-repo-guard, auto-commit-on-exit |
 | TUI (3) | status-line, model-status, custom-footer |
+| Subagents | délégation à contexte isolé (agents scout/planner/worker/reviewer sur Ornith) + workflow `/implement` |
 
 Après installation, `pi list` affiche **11 paquets** et un prompt d'une ligne énumère **20 skills**.
 
@@ -140,6 +141,36 @@ Ornith écrit alors un script Playwright (chromium headless) et l'exécute via l
 
 > Note : `/browse` et `/qa` (gstack) sont des outils **Claude Code** séparés, pas des paquets `pi` ;
 > ils ne font pas partie de ce dépôt.
+
+## Subagents (délégation, contexte isolé)
+
+Pour les tâches longues ou parallèles (par exemple la skill superpowers `subagent-driven-development`),
+Ornith peut **déléguer** à des subagents : chacun s'exécute dans un **process `pi` isolé** avec son
+propre contexte, ce qui évite de gonfler le thread principal. L'outil `subagent` offre 3 modes (un
+agent, parallèle, chaîné). Workflow-prompts fournis : `/implement` (scout → planner → worker),
+`/scout-and-plan`, `/implement-and-review`.
+
+**Piège d'installation** : installer l'extension via le **fichier** `index.ts`, pas le dossier. Le
+dossier n'a pas de `package.json`, donc `pi install <dossier>` n'expose aucun outil :
+
+```bash
+EX=$(npm config get prefix)/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions
+pi install "$EX/subagent/index.ts"
+```
+
+**Agents sur Ornith** : les agents d'exemple ciblent des modèles Claude ; sur un setup Ornith-only il
+faut les repointer sur `ornith/Ornith-1.0-35B` dans `~/.pi/agent/agents/*.md` (le script
+`mirror-setup.sh` le fait). Les workflow-prompts vont dans `~/.pi/agent/prompts/`.
+
+### Limite de contexte (erreur 400)
+
+Ornith a une fenêtre de **131072 tokens** (input + output combinés). Sur un thread qui grossit trop on
+voit : `400 ... maximum context length is 131072 ... N output + M input`. Deux leviers :
+
+- `maxTokens` du provider est réglé à **16384** (au lieu de 32768) pour laisser de la marge à l'input.
+- Pour les longues sessions : **déléguer aux subagents** (contexte isolé) et utiliser `/compact` ou un
+  nouveau thread. La progression d'un flux SDD vit dans des fichiers (`.superpowers/sdd/progress.md`),
+  donc un nouveau thread reprend où on en était.
 
 ## Fichiers
 
