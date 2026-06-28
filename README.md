@@ -36,7 +36,7 @@ que son propre dossier `userData` Electron) : il suffit donc de **remplir ce seu
 |------|----------|
 | Provider | `ornith` → `Ornith-1.0-35B` (OpenAI Chat Completions, 131K de contexte, raisonnement) |
 | Skills process (14) | [obra/superpowers](https://github.com/obra/superpowers) |
-| Skills créatives (6) | frontend-design, web-artifacts-builder, webapp-testing, theme-factory, brand-guidelines, canvas-design (depuis [anthropics/skills](https://github.com/anthropics/skills)) |
+| Skills créatives (6) | frontend-design, web-artifacts-builder, **webapp-testing** (tests E2E Playwright), theme-factory, brand-guidelines, canvas-design (depuis [anthropics/skills](https://github.com/anthropics/skills)) |
 | Sécurité (5) | notify, protected-paths, confirm-destructive, dirty-repo-guard, auto-commit-on-exit |
 | TUI (3) | status-line, model-status, custom-footer |
 
@@ -113,6 +113,33 @@ Pourquoi ça marche tout seul (et un piège à éviter) :
 2. L'endpoint répond-il ? `curl -sS "$ORNITH_BASE_URL/models" -H "Authorization: Bearer $ORNITH_API_KEY"`
 3. Quittez **complètement** pi-gui (⌘Q, pas seulement fermer la fenêtre) pour que son runtime recharge
    l'agent dir.
+
+## Tests E2E navigateur (Ornith)
+
+Le test E2E en navigateur **headless** est déjà couvert côté pi : le skill **`webapp-testing`** (l'un
+des 6 skills Anthropic ci-dessus) pilote **Playwright** pour tester des applications web locales. Il
+permet de vérifier le fonctionnement d'un frontend, déboguer l'UI, capturer des screenshots et lire les
+logs navigateur ; un helper `scripts/with_server.py` gère automatiquement le cycle de vie du ou des
+serveurs (frontend + backend).
+
+**Prérequis** (une seule fois) : Python avec Playwright.
+
+```bash
+pip install playwright
+playwright install chromium
+```
+
+**Utilisation** : demandez à Ornith de tester votre application, par exemple :
+
+```bash
+echo "teste le formulaire de login sur http://localhost:5173 avec webapp-testing" \
+  | pi --provider ornith --model Ornith-1.0-35B
+```
+
+Ornith écrit alors un script Playwright (chromium headless) et l'exécute via le helper de serveur.
+
+> Note : `/browse` et `/qa` (gstack) sont des outils **Claude Code** séparés, pas des paquets `pi` ;
+> ils ne font pas partie de ce dépôt.
 
 ## Fichiers
 
