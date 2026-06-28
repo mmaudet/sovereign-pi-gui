@@ -1,98 +1,136 @@
 # sovereign-pi-gui
 
-Run a **self-hosted, OpenAI-compatible LLM** (here: `Ornith-1.0-35B` on vLLM/RunPod) inside the
-[`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) coding agent — both the
-**terminal CLI** and the **pi-gui desktop app** — with the same skills and safety extensions you'd
-run on a server. No fork of pi-gui, no rebuild: everything is config under `~/.pi/agent`.
+Faire tourner un **LLM auto-hébergé compatible OpenAI** (ici `Ornith-1.0-35B` servi par vLLM sur
+RunPod) à l'intérieur de l'agent de code [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) —
+aussi bien dans le **CLI terminal** que dans l'**application de bureau pi-gui** — avec les mêmes skills
+et extensions de sécurité qu'on aurait sur un serveur. **Sans forker pi-gui ni le recompiler** : tout se
+joue dans la configuration sous `~/.pi/agent`.
 
-> Verified on macOS with pi `0.80.2`. The same steps work on Linux.
+> Vérifié sur macOS avec pi `0.80.2`. Les mêmes étapes fonctionnent sous Linux.
 
-## Why
+## But
 
-`pi` ships with cloud providers (OpenAI, Anthropic, …). To point it at *your own* endpoint you register
-a **custom provider extension**. pi-gui's UI has no "add custom provider" form — but its runtime reads
-the **same** `~/.pi/agent/settings.json` as the CLI, so registering the provider once lights it up in
-both surfaces.
+`pi` est livré avec des fournisseurs cloud (OpenAI, Anthropic…). Pour le pointer vers **votre propre
+endpoint**, on enregistre un **fournisseur personnalisé** (custom provider) via une petite extension.
+L'interface de pi-gui n'offre pas de formulaire « ajouter un provider », **mais** son runtime lit le
+**même** fichier `~/.pi/agent/settings.json` que le CLI : enregistrer le provider une seule fois
+l'active donc dans les deux surfaces.
 
-## Architecture
+## Opération (comment ça marche)
 
 ```
             ~/.pi/agent/settings.json   ← packages: [ ornith-provider, superpowers, … ]
-                      │  (shared agent dir)
+                      │  (agent dir partagé)
         ┌─────────────┴─────────────┐
-   pi (CLI)                    pi-gui (Electron desktop)
+   pi (CLI)                    pi-gui (bureau Electron)
         │                            │
-        └──────────► OpenAI-compatible endpoint (vLLM / LM Studio / Ollama / RunPod)
+        └──────────► endpoint compatible OpenAI (vLLM / LM Studio / Ollama / RunPod)
 ```
 
-Both runtimes resolve `getAgentDir()` → `~/.pi/agent`. pi-gui does **not** override it (it only sets
-its own Electron `userData` dir), so populating that one directory is all it takes.
+Les deux runtimes résolvent `getAgentDir()` → `~/.pi/agent`. pi-gui ne le surcharge pas (il ne définit
+que son propre dossier `userData` Electron) : il suffit donc de **remplir ce seul dossier**.
 
-## What you get
+## Ce que vous obtenez
 
-| Group | Items |
-|------|-------|
-| Provider | `ornith` → `Ornith-1.0-35B` (OpenAI Chat Completions, 131K context, reasoning) |
-| Process skills (14) | [obra/superpowers](https://github.com/obra/superpowers) |
-| Creative skills (6) | frontend-design, web-artifacts-builder, webapp-testing, theme-factory, brand-guidelines, canvas-design — from [anthropics/skills](https://github.com/anthropics/skills) |
-| Safety (5) | notify, protected-paths, confirm-destructive, dirty-repo-guard, auto-commit-on-exit |
+| Groupe | Éléments |
+|------|----------|
+| Provider | `ornith` → `Ornith-1.0-35B` (OpenAI Chat Completions, 131K de contexte, raisonnement) |
+| Skills process (14) | [obra/superpowers](https://github.com/obra/superpowers) |
+| Skills créatives (6) | frontend-design, web-artifacts-builder, webapp-testing, theme-factory, brand-guidelines, canvas-design — depuis [anthropics/skills](https://github.com/anthropics/skills) |
+| Sécurité (5) | notify, protected-paths, confirm-destructive, dirty-repo-guard, auto-commit-on-exit |
 | TUI (3) | status-line, model-status, custom-footer |
 
-After install, `pi list` shows **11 packages** and a one-line prompt enumerates **20 skills**.
+Après installation, `pi list` affiche **11 paquets** et un prompt d'une ligne énumère **20 skills**.
 
-## Quick start
+## Commandes
+
+### 1. Renseigner l'endpoint (ne jamais committer la clé)
 
 ```bash
-# 1. Point at your endpoint (never commit the key)
-cp .env.example .env && "$EDITOR" .env
-set -a; . ./.env; set +a
+cp .env.example .env
+"$EDITOR" .env                 # renseignez ORNITH_BASE_URL et ORNITH_API_KEY
+set -a; . ./.env; set +a       # charge les variables dans le shell courant
+```
 
-# 2. Run the idempotent installer
+### 2. Lancer l'installateur idempotent
+
+```bash
 ./scripts/mirror-setup.sh
+```
 
-# 3. Verify
+Réexécuter le script est sans risque : `pi install` ignore les paquets déjà enregistrés.
+
+### 3. Vérifier
+
+```bash
 pi --list-models ornith
 echo "list all skills you have available" | pi --provider ornith --model Ornith-1.0-35B --print --thinking off
 ```
 
-Re-running `mirror-setup.sh` is safe — `pi install` skips packages already registered.
+La deuxième commande doit lister **20 skills** (14 « Process & Meta » + 6 « Creative & Design »).
 
-## pi-gui (desktop)
+### Ce que fait le script, en clair
 
-After running the installer, **fully quit (⌘Q) and reopen pi-gui**, then open the model picker —
-`ornith · Ornith 1.0 35B MoE` is there.
+```bash
+# le provider Ornith (lit ORNITH_BASE_URL / ORNITH_API_KEY)
+pi install ./extensions/ornith-provider.ts
 
-Why it just works (and a footgun to avoid):
-- The picker shows **every _available_ model when no allowlist is set** — i.e. when
-  `enabledModelPatterns` is empty (`composer-commands.ts`: `enabledPatterns.length === 0 ⇒ show all`).
-  A registered custom provider that carries an API key is "available", so it appears automatically.
-- ⚠️ **Do not** add `enabledModels` to a workspace `.pi/settings.json` unless you intend it as a strict
-  **allowlist** — a non-empty list **hides every model not in it**, including the gpt built-ins.
-- Optional nicety: pre-select ornith as a workspace's default by copying
-  [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) to
-  `<workspace>/.pi/settings.json`. It sets only `defaultProvider` / `defaultModel` — zero visibility impact.
+# 14 skills de process
+pi install git:github.com/obra/superpowers
 
-### If ornith doesn't appear
-1. CLI sees it? `pi --list-models ornith`
-2. Endpoint alive? `curl -sS "$ORNITH_BASE_URL/models" -H "Authorization: Bearer $ORNITH_API_KEY"`
-3. **Fully** quit pi-gui (⌘Q — not just closing the window) so its runtime reloads the agent dir.
+# 6 skills créatives Anthropic : clone du repo + wrapper qui les enregistre
+git clone --depth 1 https://github.com/anthropics/skills.git \
+  ~/.pi/agent/git/github.com/anthropics/skills
+pi install ./extensions/anthropic-skills-pack.ts
 
-## Files
+# 5 extensions de sécurité + 3 extensions TUI (exemples fournis avec le SDK)
+EX=$(npm config get prefix)/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions
+for e in notify protected-paths confirm-destructive dirty-repo-guard auto-commit-on-exit \
+         status-line model-status custom-footer; do
+  pi install "$EX/$e.ts"
+done
+```
 
-- [`extensions/ornith-provider.ts`](extensions/ornith-provider.ts) — the custom provider. Reads
-  `ORNITH_BASE_URL` / `ORNITH_API_KEY` from the environment; edit the model block for a different model.
-- [`extensions/anthropic-skills-pack.ts`](extensions/anthropic-skills-pack.ts) — registers selected
-  anthropics/skills with pi via the `resources_discover` hook (points at each `SKILL.md`).
-- [`scripts/mirror-setup.sh`](scripts/mirror-setup.sh) — idempotent installer for everything above.
-- [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) — optional
-  per-workspace default-model file.
+## pi-gui (bureau)
 
-## Security
+Après le script, **quittez complètement pi-gui (⌘Q) puis rouvrez-le**, et ouvrez le sélecteur de
+modèle : `ornith · Ornith 1.0 35B MoE` y figure.
 
-- The provider key is read from `ORNITH_API_KEY` — keep it in `.env` (git-ignored), never in the repo.
-- Rotate the key if it has ever been shared in plaintext.
+Pourquoi ça marche tout seul (et un piège à éviter) :
+- Le sélecteur affiche **tous les modèles _disponibles_ quand aucune liste blanche n'est définie**,
+  c.-à-d. quand `enabledModelPatterns` est vide (`composer-commands.ts` : `length === 0 ⇒ tout afficher`).
+  Un provider personnalisé qui porte une clé API est « disponible » → il apparaît automatiquement.
+- ⚠️ **N'ajoutez pas** `enabledModels` dans un `.pi/settings.json` de workspace, sauf si vous le voulez
+  comme **liste blanche stricte** : une liste non vide **masque tous les modèles absents** de la liste
+  (y compris les modèles gpt intégrés).
+- Optionnel : pré-sélectionner ornith comme modèle par défaut d'un workspace en copiant
+  [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) vers
+  `<workspace>/.pi/settings.json`. Il ne définit que `defaultProvider` / `defaultModel` — aucun impact
+  sur la visibilité.
 
-## Credits
+### Si ornith n'apparaît pas
+1. Le CLI le voit-il ? `pi --list-models ornith`
+2. L'endpoint répond-il ? `curl -sS "$ORNITH_BASE_URL/models" -H "Authorization: Bearer $ORNITH_API_KEY"`
+3. Quittez **complètement** pi-gui (⌘Q, pas seulement fermer la fenêtre) pour que son runtime recharge
+   l'agent dir.
 
-Built on [`@earendil-works/pi-coding-agent`](https://github.com/earendil-works/pi-mono),
-[obra/superpowers](https://github.com/obra/superpowers), and [anthropics/skills](https://github.com/anthropics/skills).
+## Fichiers
+
+- [`extensions/ornith-provider.ts`](extensions/ornith-provider.ts) — le provider personnalisé. Lit
+  `ORNITH_BASE_URL` / `ORNITH_API_KEY` depuis l'environnement ; modifiez le bloc `models` pour un autre modèle.
+- [`extensions/anthropic-skills-pack.ts`](extensions/anthropic-skills-pack.ts) — enregistre les skills
+  anthropics/skills choisies via le hook `resources_discover` (pointe sur chaque `SKILL.md`).
+- [`scripts/mirror-setup.sh`](scripts/mirror-setup.sh) — installateur idempotent de tout ce qui précède.
+- [`pi-gui/workspace-settings.example.json`](pi-gui/workspace-settings.example.json) — fichier optionnel
+  de modèle par défaut, par workspace.
+
+## Sécurité
+
+- La clé du provider est lue depuis `ORNITH_API_KEY` — gardez-la dans `.env` (ignoré par git), jamais
+  dans le dépôt.
+- Faites tourner (rotate) la clé si elle a déjà été partagée en clair.
+
+## Crédits
+
+Construit sur [`@earendil-works/pi-coding-agent`](https://github.com/earendil-works/pi-mono),
+[obra/superpowers](https://github.com/obra/superpowers) et [anthropics/skills](https://github.com/anthropics/skills).
